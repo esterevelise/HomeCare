@@ -2111,34 +2111,45 @@ const PRECO_TIPOS = [
 const Precos = {
   filterCat: 'all',
   filterTipo: 'all',
+  _subscribed: false,
 
   // ── FIREBASE ──
-  init(){
-    const waitFb = () => {
-      if(!window._dbReady){ window.addEventListener('dbReady', ()=>this.subscribeFirebase(), {once:true}); return; }
-      this.subscribeFirebase();
-    };
-    waitFb();
-    this.renderView();
-  },
-
-  subscribeFirebase(){
+  _subscribe(){
+    if(this._subscribed) return;
+    this._subscribed = true;
     const { db, collection, onSnapshot } = window.DB_FIREBASE;
     onSnapshot(collection(db,'procedimentos'), snap => {
       DB.precos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       DB.precos.sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
-      this.renderStats();
-      this.renderList();
+      // Sempre atualiza a view (se estiver montada no DOM)
+      const view = document.getElementById('view-precos');
+      if(view && document.getElementById('preco-list')) {
+        this.renderStats();
+        this.renderList();
+      } else if(view && view.classList.contains('active')) {
+        this.renderView();
+      }
     }, err => {
       console.error('Precos Firebase error:', err);
       Utils.toast('Erro ao carregar tabela de preços: ' + err.message, 'error');
     });
   },
 
+  init(){
+    if(window._dbReady){
+      this._subscribe();
+    } else {
+      window.addEventListener('dbReady', () => this._subscribe(), {once:true});
+    }
+  },
+
   // ── VIEW PRINCIPAL ──
   renderView(){
+    try {
+    // Garante que o listener Firebase está ativo
+    if(window._dbReady) this._subscribe();
     const view = document.getElementById('view-precos');
-    if(!view) return;
+    if(!view) { console.error('view-precos não encontrada'); return; }
     view.innerHTML = `
       <div class="page-hdr">
         <div>
@@ -2163,8 +2174,10 @@ const Precos = {
 
       <div id="preco-list"></div>
     `;
+    // Popula com dados já em memória (se houver) enquanto Firebase não responde
     this.renderStats();
     this.renderList();
+    } catch(err) { console.error('Precos.renderView erro:', err); }
   },
 
   setFilterCat(v){ this.filterCat = v; this.renderView(); },
@@ -2229,8 +2242,9 @@ const Precos = {
               <div class="preco-tipo-badges">${tipos}</div>
               ${p.ativo === false ? '<span class="badge badge-neutral">Inativo</span>' : '<span class="badge badge-success badge-dot">Ativo</span>'}
               <button class="btn btn-sm btn-ghost" onclick="Precos.openForm('${p.id}')">Editar</button>
-              <button class="btn btn-sm btn-danger" onclick="Precos.deletar('${p.id}','${(p.nome||'').replace(/'/g,'\\'')}')">Excluir</button>
+              <button class="btn btn-sm btn-danger" data-id="${p.id}" data-nome="${(p.nome||'').replace(/"/g,'&#34;')}" onclick="Precos.deletar(this.dataset.id, this.dataset.nome)">Excluir</button>
             </div>
+          </div>
           </div>
           <div class="preco-values">
             <div class="preco-val-block">
@@ -2346,7 +2360,7 @@ const Precos = {
           </div>
 
           <div class="modal-footer">
-            ${id ? `<button class="btn btn-sm btn-danger" style="margin-right:auto" onclick="Precos.deletar('${id}','${(p?.nome||'').replace(/'/g,"\\'")}')">Excluir</button>` : ''}
+            ${id ? `<button class="btn btn-sm btn-danger" style="margin-right:auto" data-id="${id}" data-nome="${(p?.nome||'').replace(/"/g,'&#34;')}" onclick="Precos.deletar(this.dataset.id, this.dataset.nome)">Excluir</button>` : ''}
             <button class="btn btn-md btn-ghost" onclick="closeModal('m-preco')">Cancelar</button>
             <button class="btn btn-md btn-primary" onclick="Precos.save()">Salvar procedimento</button>
           </div>
