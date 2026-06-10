@@ -2093,118 +2093,89 @@ window.Prontuario=Prontuario;
 // PRECOS — Tabela de Procedimentos
 // ═══════════════════════════════════
 
-window.DB.precos = [];  // array local espelhando Firestore
+window.DB.precos = [];
 
-const PRECO_CATS = [
-  'Cuidados Básicos',
-  'Enfermagem',
-  'Fisioterapia / Reabilitação',
-  'Procedimentos Técnicos',
-  'Acompanhamento',
-  'Outros'
-];
-
+const PRECO_CATS = ['Cuidados Básicos','Enfermagem','Fisioterapia / Reabilitação','Procedimentos Técnicos','Acompanhamento','Outros'];
 const PRECO_TIPOS = [
-  { key: 'tecnico', label: 'Técnico de Enfermagem', badge: 'badge-blue' },
-  { key: 'cuidador', label: 'Cuidador de Idoso',    badge: 'badge-teal' },
-  { key: 'enfermeiro', label: 'Enfermeiro',          badge: 'badge-orange' },
+  {key:'tecnico',   label:'Téc. Enfermagem', badge:'badge-blue'},
+  {key:'cuidador',  label:'Cuidador',        badge:'badge-teal'},
+  {key:'enfermeiro',label:'Enfermeiro',       badge:'badge-orange'},
 ];
 
 const Precos = {
-  filterCat: 'all',
-  filterTipo: 'all',
-  _subscribed: false,
+  filterCat:'all', filterTipo:'all', _sub:false,
 
-  // ── FIREBASE ──
   _subscribe(){
-    if(this._subscribed) return;
-    this._subscribed = true;
-    const { db, collection, onSnapshot } = window.DB_FIREBASE;
+    if(this._sub) return;
+    this._sub = true;
+    const {db,collection,onSnapshot} = window.DB_FIREBASE;
     onSnapshot(collection(db,'procedimentos'), snap => {
-      DB.precos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      DB.precos.sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
-      // Sempre atualiza a view (se estiver montada no DOM)
-      const view = document.getElementById('view-precos');
-      if(view && document.getElementById('preco-list')) {
-        this.renderStats();
-        this.renderList();
-      } else if(view && view.classList.contains('active')) {
-        this.renderView();
-      }
-    }, err => {
-      console.error('Precos Firebase error:', err);
-      Utils.toast('Erro ao carregar tabela de preços: ' + err.message, 'error');
-    });
+      DB.precos = snap.docs.map(d=>({id:d.id,...d.data()}));
+      DB.precos.sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+      if(document.getElementById('preco-list')) { this.renderStats(); this.renderList(); }
+    }, err => { Utils.toast('Erro Firebase preços: '+err.message,'error'); });
   },
 
   init(){
-    if(window._dbReady){
-      this._subscribe();
-    } else {
-      window.addEventListener('dbReady', () => this._subscribe(), {once:true});
-    }
+    if(window._dbReady) this._subscribe();
+    else window.addEventListener('dbReady', ()=>this._subscribe(), {once:true});
   },
 
-  // ── VIEW PRINCIPAL ──
   renderView(){
-    try {
-    // Garante que o listener Firebase está ativo
     if(window._dbReady) this._subscribe();
     const view = document.getElementById('view-precos');
-    if(!view) { console.error('view-precos não encontrada'); return; }
-    view.innerHTML = `
-      <div class="page-hdr">
-        <div>
-          <div class="page-title">Tabela de Preços</div>
-          <div class="page-sub">Valores cobrados ao cliente e repasse ao prestador por procedimento</div>
-        </div>
-        <button class="btn btn-md btn-primary" onclick="Precos.openForm()">+ Novo procedimento</button>
-      </div>
+    if(!view) return;
 
-      <div class="preco-stat-bar" id="preco-stats"></div>
+    const catBtns = ['all',...PRECO_CATS].map(c=>
+      '<button class="btn btn-xs '+(this.filterCat===c?'btn-outline-orange':'btn-ghost')+
+      '" onclick="Precos.setFilterCat(\''+c+'\')">'+(c==='all'?'Todos':c)+'</button>'
+    ).join('');
 
-      <div class="preco-filter-bar">
-        <span style="font-size:12px;font-weight:700;color:var(--n400);text-transform:uppercase;letter-spacing:.06em;margin-right:4px">Categoria:</span>
-        <button class="btn btn-xs ${this.filterCat==='all'?'btn-outline-orange':'btn-ghost'}" onclick="Precos.setFilterCat('all')">Todos</button>
-        ${PRECO_CATS.map(c=>`<button class="btn btn-xs ${this.filterCat===c?'btn-outline-orange':'btn-ghost'}" onclick="Precos.setFilterCat('${c}')">${c}</button>`).join('')}
-      </div>
-      <div class="preco-filter-bar" style="margin-top:-12px">
-        <span style="font-size:12px;font-weight:700;color:var(--n400);text-transform:uppercase;letter-spacing:.06em;margin-right:4px">Profissional:</span>
-        <button class="btn btn-xs ${this.filterTipo==='all'?'btn-outline-teal':'btn-ghost'}" onclick="Precos.setFilterTipo('all')">Todos</button>
-        ${PRECO_TIPOS.map(t=>`<button class="btn btn-xs ${this.filterTipo===t.key?'btn-outline-teal':'btn-ghost'}" onclick="Precos.setFilterTipo('${t.key}')">${t.label}</button>`).join('')}
-      </div>
+    const tipBtns = ['all',...PRECO_TIPOS.map(t=>t.key)].map((k,i)=>{
+      const lbl = k==='all'?'Todos':PRECO_TIPOS[i-1].label;
+      return '<button class="btn btn-xs '+(this.filterTipo===k?'btn-outline-teal':'btn-ghost')+
+             '" onclick="Precos.setFilterTipo(\''+k+'\')">'+lbl+'</button>';
+    }).join('');
 
-      <div id="preco-list"></div>
-    `;
-    // Popula com dados já em memória (se houver) enquanto Firebase não responde
+    view.innerHTML =
+      '<div class="page-hdr">'+
+        '<div>'+
+          '<div class="page-title">Tabela de Preços</div>'+
+          '<div class="page-sub">Valores cobrados ao cliente e repasse ao prestador por procedimento</div>'+
+        '</div>'+
+        '<button class="btn btn-md btn-primary" onclick="Precos.openForm()">+ Novo procedimento</button>'+
+      '</div>'+
+      '<div class="preco-stat-bar" id="preco-stats"></div>'+
+      '<div class="preco-filter-bar">'+
+        '<span style="font-size:11px;font-weight:700;color:var(--n400);text-transform:uppercase;letter-spacing:.06em">Categoria: </span>'+
+        catBtns+
+      '</div>'+
+      '<div class="preco-filter-bar" style="margin-top:-10px">'+
+        '<span style="font-size:11px;font-weight:700;color:var(--n400);text-transform:uppercase;letter-spacing:.06em">Profissional: </span>'+
+        tipBtns+
+      '</div>'+
+      '<div id="preco-list"></div>';
+
     this.renderStats();
     this.renderList();
-    } catch(err) { console.error('Precos.renderView erro:', err); }
   },
 
-  setFilterCat(v){ this.filterCat = v; this.renderView(); },
-  setFilterTipo(v){ this.filterTipo = v; this.renderView(); },
+  setFilterCat(v){ this.filterCat=v; this.renderView(); },
+  setFilterTipo(v){ this.filterTipo=v; this.renderView(); },
 
   renderStats(){
     const el = document.getElementById('preco-stats');
     if(!el) return;
-    const total = DB.precos.length;
-    const avgMargem = total
-      ? DB.precos.reduce((acc,p) => acc + ((p.vlrCliente||0) - (p.vlrPrestador||0)), 0) / total
-      : 0;
-    const maxCliente = total ? Math.max(...DB.precos.map(p=>p.vlrCliente||0)) : 0;
-    const minCliente = total ? Math.min(...DB.precos.map(p=>p.vlrCliente||0)) : 0;
-
+    const tot = DB.precos.length;
+    const avg = tot ? DB.precos.reduce((s,p)=>s+((p.vlrCliente||0)-(p.vlrPrestador||0)),0)/tot : 0;
+    const maxC = tot ? Math.max(...DB.precos.map(p=>p.vlrCliente||0)) : 0;
+    const minC = tot ? Math.min(...DB.precos.map(p=>p.vlrCliente||0)) : 0;
     el.innerHTML = [
-      { c:'neutral', l:'Procedimentos', v: total },
-      { c:'orange',  l:'Maior valor (cliente)', v: Utils.fmtR(maxCliente) },
-      { c:'teal',    l:'Menor valor (cliente)', v: Utils.fmtR(minCliente) },
-      { c:'success', l:'Margem média', v: Utils.fmtR(avgMargem) },
-    ].map(s=>`
-      <div class="stat-card ${s.c}">
-        <div class="stat-label">${s.l}</div>
-        <div class="stat-val" style="${typeof s.v === 'string' ? 'font-size:18px' : ''}">${s.v}</div>
-      </div>`).join('');
+      {c:'neutral',l:'Procedimentos',v:tot},
+      {c:'orange', l:'Maior valor (cliente)',v:Utils.fmtR(maxC)},
+      {c:'teal',   l:'Menor valor (cliente)',v:Utils.fmtR(minC)},
+      {c:'success',l:'Margem média',v:Utils.fmtR(avg)},
+    ].map(s=>'<div class="stat-card '+s.c+'"><div class="stat-label">'+s.l+'</div><div class="stat-val" style="font-size:18px">'+s.v+'</div></div>').join('');
   },
 
   renderList(){
@@ -2212,167 +2183,154 @@ const Precos = {
     if(!cont) return;
 
     let list = DB.precos;
-    if(this.filterCat  !== 'all') list = list.filter(p => p.categoria === this.filterCat);
-    if(this.filterTipo !== 'all') list = list.filter(p => (p.tipos||[]).includes(this.filterTipo));
+    if(this.filterCat  !== 'all') list = list.filter(p=>p.categoria===this.filterCat);
+    if(this.filterTipo !== 'all') list = list.filter(p=>(p.tipos||[]).includes(this.filterTipo));
 
     if(!list.length){
-      cont.innerHTML = `
-        <div class="preco-empty">
-          <div class="preco-empty-icon">💲</div>
-          <div class="preco-empty-title">${DB.precos.length ? 'Nenhum procedimento neste filtro' : 'Tabela vazia'}</div>
-          <div>${DB.precos.length ? 'Tente outro filtro.' : 'Clique em "+ Novo procedimento" para começar.'}</div>
-        </div>`;
+      cont.innerHTML =
+        '<div class="preco-empty">'+
+          '<div class="preco-empty-icon">💲</div>'+
+          '<div class="preco-empty-title">'+(DB.precos.length?'Nenhum resultado neste filtro':'Tabela vazia')+'</div>'+
+          '<div>'+(DB.precos.length?'Tente outro filtro.':'Clique em "+ Novo procedimento" para começar.')+'</div>'+
+        '</div>';
       return;
     }
 
-    const TIPO_ABBR  = { tecnico:'Téc. Enf.', cuidador:'Cuidador', enfermeiro:'Enfermeiro' };
-    const TIPO_BADGE = { tecnico:'badge-blue', cuidador:'badge-teal', enfermeiro:'badge-orange' };
+    const ABBR  = {tecnico:'Téc. Enf.',cuidador:'Cuidador',enfermeiro:'Enfermeiro'};
+    const BADGC = {tecnico:'badge-blue',cuidador:'badge-teal',enfermeiro:'badge-orange'};
 
-    const rows = list.map(p => {
-      const margem = (p.vlrCliente||0) - (p.vlrPrestador||0);
-      const pct    = p.vlrCliente ? ((margem / p.vlrCliente)*100).toFixed(0) : 0;
-      const tipos  = (p.tipos||[]).map(t =>
-        `<span class="badge ${TIPO_BADGE[t]||'badge-neutral'}" style="font-size:10px;padding:2px 7px">${TIPO_ABBR[t]||t}</span>`
-      ).join(' ');
-      const margemColor = margem >= 0 ? 'var(--success-text)' : 'var(--danger-text)';
-      return `
-        <div class="preco-tbl-row${p.ativo===false?' inativo':''}">
-          <div class="preco-td">
-            <div class="preco-td-nome">${p.nome||'—'}</div>
-            <div class="preco-td-cat">${p.categoria||'—'}${p.unidade?' · '+p.unidade:''}</div>
-          </div>
-          <div class="preco-td" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">${tipos||'—'}</div>
-          <div class="preco-td"><span class="preco-td-val cli">${Utils.fmtR(p.vlrCliente||0)}</span></div>
-          <div class="preco-td"><span class="preco-td-val pre">${Utils.fmtR(p.vlrPrestador||0)}</span></div>
-          <div class="preco-td">
-            <span class="preco-td-val" style="color:${margemColor}">${Utils.fmtR(margem)}</span>
-            <div class="preco-td-pct">${pct}%</div>
-          </div>
-          <div class="preco-td" style="text-align:center">
-            ${p.ativo===false
-              ? '<span class="badge badge-neutral" style="font-size:10px">Inativo</span>'
-              : '<span class="badge badge-success badge-dot" style="font-size:10px">Ativo</span>'}
-          </div>
-          <div class="preco-td-actions">
-            <button class="btn btn-xs btn-ghost" onclick="Precos.openForm('${p.id}')">✏️</button>
-            <button class="btn btn-xs btn-danger" data-id="${p.id}" data-nome="${(p.nome||'').replace(/"/g,'&#34;')}" onclick="Precos.deletar(this.dataset.id, this.dataset.nome)" style="padding:4px 8px">✕</button>
-          </div>
-        </div>`;
-    }).join('');
+    let rows = '';
+    for(const p of list){
+      const margem = (p.vlrCliente||0)-(p.vlrPrestador||0);
+      const pct    = p.vlrCliente ? ((margem/p.vlrCliente)*100).toFixed(0) : 0;
+      const mColor = margem>=0 ? 'var(--success-text)' : 'var(--danger-text)';
+      const tipos  = (p.tipos||[]).map(t=>'<span class="badge '+(BADGC[t]||'badge-neutral')+'" style="font-size:10px;padding:2px 7px">'+(ABBR[t]||t)+'</span>').join(' ');
+      const status = p.ativo===false
+        ? '<span class="badge badge-neutral" style="font-size:10px">Inativo</span>'
+        : '<span class="badge badge-success badge-dot" style="font-size:10px">Ativo</span>';
+      rows +=
+        '<div class="preco-tbl-row'+(p.ativo===false?' inativo':'')+'" style="display:grid;grid-template-columns:2fr 1fr 110px 110px 100px 90px 80px;align-items:center;border-bottom:1px solid var(--n100)">'+
+          '<div class="preco-td">'+
+            '<div style="font-weight:600;font-size:13px;color:var(--n800)">'+(p.nome||'—')+'</div>'+
+            '<div style="font-size:11px;color:var(--n400)">'+(p.categoria||'—')+(p.unidade?' · '+p.unidade:'')+'</div>'+
+          '</div>'+
+          '<div class="preco-td" style="display:flex;gap:4px;flex-wrap:wrap">'+(tipos||'—')+'</div>'+
+          '<div class="preco-td"><span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--orange-500)">'+Utils.fmtR(p.vlrCliente||0)+'</span></div>'+
+          '<div class="preco-td"><span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--teal-600)">'+Utils.fmtR(p.vlrPrestador||0)+'</span></div>'+
+          '<div class="preco-td">'+
+            '<span style="font-family:var(--font-display);font-size:15px;font-weight:700;color:'+mColor+'">'+Utils.fmtR(margem)+'</span>'+
+            '<div style="font-size:11px;color:var(--n400)">'+pct+'%</div>'+
+          '</div>'+
+          '<div class="preco-td" style="text-align:center">'+status+'</div>'+
+          '<div style="display:flex;gap:6px;justify-content:flex-end;padding:0 12px">'+
+            '<button class="btn btn-xs btn-ghost" onclick="Precos.openForm(\''+p.id+'\')">✏</button>'+
+            '<button class="btn btn-xs btn-danger" onclick="Precos.deletarById(\''+p.id+'\')" style="padding:4px 8px">✕</button>'+
+          '</div>'+
+        '</div>';
+    }
 
-    cont.innerHTML = `
-      <div class="preco-tbl-wrap">
-        <div class="preco-tbl-head">
-          <div class="preco-th">Procedimento</div>
-          <div class="preco-th">Profissional</div>
-          <div class="preco-th" style="color:var(--orange-600)">💰 Cliente</div>
-          <div class="preco-th" style="color:var(--teal-600)">🔄 Prestador</div>
-          <div class="preco-th" style="color:var(--success-text)">📈 Margem</div>
-          <div class="preco-th">Status</div>
-          <div class="preco-th"></div>
-        </div>
-        ${rows}
-      </div>`;
-  }
+    cont.innerHTML =
+      '<div style="background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden;border:1px solid var(--n200)">'+
+        '<div style="display:grid;grid-template-columns:2fr 1fr 110px 110px 100px 90px 80px;background:var(--n50);border-bottom:2px solid var(--n200)">'+
+          '<div class="preco-th">Procedimento</div>'+
+          '<div class="preco-th">Profissional</div>'+
+          '<div class="preco-th" style="color:var(--orange-600)">💰 Cliente</div>'+
+          '<div class="preco-th" style="color:var(--teal-600)">🔄 Prestador</div>'+
+          '<div class="preco-th" style="color:var(--success-text)">📈 Margem</div>'+
+          '<div class="preco-th">Status</div>'+
+          '<div class="preco-th"></div>'+
+        '</div>'+
+        rows+
+      '</div>';
+  },
 
-  // ── FORMULÁRIO ──
-  openForm(id = ''){
+  deletarById(id){
+    const p = DB.precos.find(x=>x.id===id);
+    const nome = p ? p.nome : id;
+    this.deletar(id, nome);
+  },
+
+  openForm(id){
+    id = id||'';
     const p = id ? DB.precos.find(x=>x.id===id) : null;
 
-    const tipoChecks = PRECO_TIPOS.map(t => `
-      <label class="turno-chk-wrap ${(p?.tipos||[]).includes(t.key) ? 'selected' : ''}" style="flex:1;min-width:140px">
-        <input type="checkbox" name="preco-tipo" value="${t.key}"
-          ${(p?.tipos||[]).includes(t.key) ? 'checked' : ''}
-          onchange="this.closest('label').classList.toggle('selected',this.checked)">
-        ${t.label}
-      </label>`).join('');
+    let tiposHtml = '';
+    for(const t of PRECO_TIPOS){
+      const checked = p && (p.tipos||[]).includes(t.key);
+      tiposHtml += '<label class="turno-chk-wrap '+(checked?'selected':'')+'" style="flex:1;min-width:140px">'+
+        '<input type="checkbox" name="preco-tipo" value="'+t.key+'"'+(checked?' checked':'')+
+        ' onchange="this.closest(\'label\').classList.toggle(\'selected\',this.checked)">'+
+        t.label+'</label>';
+    }
 
-    const catOptions = PRECO_CATS.map(c =>
-      `<option value="${c}" ${p?.categoria===c?'selected':''}>${c}</option>`
-    ).join('');
+    let catOpts = '<option value="">Selecione...</option>';
+    for(const c of PRECO_CATS){
+      catOpts += '<option value="'+c+'"'+(p&&p.categoria===c?' selected':'')+'>'+c+'</option>';
+    }
 
-    const html = `
-      <div class="modal-overlay" id="m-preco">
-        <div class="modal" style="max-width:640px">
-          <div class="modal-header">
-            <div class="modal-title">${p ? 'Editar Procedimento' : 'Novo Procedimento'}</div>
-            <button class="modal-close" onclick="closeModal('m-preco')">✕</button>
-          </div>
-          <input type="hidden" id="preco-id" value="${id}">
+    const html =
+      '<div class="modal-overlay" id="m-preco">'+
+      '<div class="modal" style="max-width:640px">'+
+        '<div class="modal-header">'+
+          '<div class="modal-title">'+(p?'Editar Procedimento':'Novo Procedimento')+'</div>'+
+          '<button class="modal-close" onclick="closeModal(\'m-preco\')">✕</button>'+
+        '</div>'+
+        '<input type="hidden" id="preco-id" value="'+id+'">'+
 
-          <div class="sec-label">Identificação</div>
-          <div class="grid-2" style="margin-bottom:16px;gap:12px">
-            <div class="form-field col-span-2">
-              <label>Nome do procedimento *</label>
-              <input type="text" id="preco-nome" value="${p?.nome||''}" placeholder="Ex: Banho no leito, Curativos simples, Plantão 12h diurno...">
-            </div>
-            <div class="form-field">
-              <label>Categoria *</label>
-              <select id="preco-cat">
-                <option value="">Selecione...</option>
-                ${catOptions}
-              </select>
-            </div>
-            <div class="form-field">
-              <label>Unidade de cobrança</label>
-              <input type="text" id="preco-unidade" value="${p?.unidade||''}" placeholder="Ex: por hora, por plantão, por visita">
-            </div>
-          </div>
+        '<div class="sec-label">Identificação</div>'+
+        '<div class="grid-2" style="margin-bottom:16px;gap:12px">'+
+          '<div class="form-field col-span-2"><label>Nome do procedimento *</label>'+
+            '<input type="text" id="preco-nome" value="'+(p?p.nome||'':'')+'" placeholder="Ex: Banho no leito, Curativo simples, Plantão 12h..."></div>'+
+          '<div class="form-field"><label>Categoria *</label>'+
+            '<select id="preco-cat">'+catOpts+'</select></div>'+
+          '<div class="form-field"><label>Unidade de cobrança</label>'+
+            '<input type="text" id="preco-unidade" value="'+(p?p.unidade||'':'')+'" placeholder="por hora, por plantão, por visita..."></div>'+
+        '</div>'+
 
-          <div class="sec-label">Tipo de profissional que realiza</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
-            ${tipoChecks}
-          </div>
+        '<div class="sec-label">Tipo de profissional</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">'+tiposHtml+'</div>'+
 
-          <div class="sec-label">Valores</div>
-          <div class="grid-2" style="gap:12px;margin-bottom:16px">
-            <div class="form-field">
-              <label>💰 Valor cobrado do cliente (R$) *</label>
-              <input type="number" id="preco-cliente" min="0" step="0.01"
-                value="${p?.vlrCliente||''}" placeholder="0,00"
-                oninput="Precos.calcMargem()">
-            </div>
-            <div class="form-field">
-              <label>🔄 Valor repassado ao prestador (R$) *</label>
-              <input type="number" id="preco-prestador" min="0" step="0.01"
-                value="${p?.vlrPrestador||''}" placeholder="0,00"
-                oninput="Precos.calcMargem()">
-            </div>
-          </div>
+        '<div class="sec-label">Valores</div>'+
+        '<div class="grid-2" style="gap:12px;margin-bottom:12px">'+
+          '<div class="form-field"><label>💰 Valor cobrado do cliente (R$) *</label>'+
+            '<input type="number" id="preco-cliente" min="0" step="0.01" value="'+(p?p.vlrCliente||'':'')+'" placeholder="0,00" oninput="Precos.calcMargem()"></div>'+
+          '<div class="form-field"><label>🔄 Valor repassado ao prestador (R$) *</label>'+
+            '<input type="number" id="preco-prestador" min="0" step="0.01" value="'+(p?p.vlrPrestador||'':'')+'" placeholder="0,00" oninput="Precos.calcMargem()"></div>'+
+        '</div>'+
 
-          <!-- Preview margem em tempo real -->
-          <div id="preco-margem-preview" style="
-            background:var(--success-bg);border:1px solid var(--success-border);
-            border-radius:var(--radius-md);padding:12px 16px;margin-bottom:16px;
-            display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;
-          ">
-            <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400)">Cliente</div><div id="prev-cliente" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--orange-500)">R$ 0,00</div></div>
-            <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400)">Prestador</div><div id="prev-prestador" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--teal-600)">R$ 0,00</div></div>
-            <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400)">Margem EloSaúde</div><div id="prev-margem" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--success-text)">R$ 0,00</div><div id="prev-pct" style="font-size:11px;color:var(--success-text)">0%</div></div>
-          </div>
+        '<div id="preco-preview" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--radius-md);margin-bottom:16px;overflow:hidden;text-align:center">'+
+          '<div style="padding:12px;border-right:1px solid var(--success-border)">'+
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400);margin-bottom:4px">Cliente</div>'+
+            '<div id="prev-c" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--orange-500)">R$ 0,00</div>'+
+          '</div>'+
+          '<div style="padding:12px;border-right:1px solid var(--success-border)">'+
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400);margin-bottom:4px">Prestador</div>'+
+            '<div id="prev-p" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--teal-600)">R$ 0,00</div>'+
+          '</div>'+
+          '<div style="padding:12px">'+
+            '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--n400);margin-bottom:4px">Margem EloSaúde</div>'+
+            '<div id="prev-m" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--success-text)">R$ 0,00</div>'+
+            '<div id="prev-pct" style="font-size:11px;color:var(--success-text)">0%</div>'+
+          '</div>'+
+        '</div>'+
 
-          <div class="grid-2" style="gap:12px;margin-bottom:6px">
-            <div class="form-field">
-              <label>Observações</label>
-              <textarea id="preco-obs" style="min-height:60px">${p?.obs||''}</textarea>
-            </div>
-            <div class="form-field" style="justify-content:flex-start;gap:10px">
-              <label>Status</label>
-              <label class="toggle-wrap pago" style="margin-top:6px">
-                <input type="checkbox" id="preco-ativo" ${p===null||p?.ativo!==false?'checked':''}>
-                <div class="toggle-track"></div>
-                <span class="toggle-label">Procedimento ativo</span>
-              </label>
-            </div>
-          </div>
+        '<div class="grid-2" style="gap:12px;margin-bottom:6px">'+
+          '<div class="form-field"><label>Observações</label>'+
+            '<textarea id="preco-obs" style="min-height:60px">'+(p?p.obs||'':'')+'</textarea></div>'+
+          '<div class="form-field"><label>Status</label>'+
+            '<label class="toggle-wrap pago" style="margin-top:8px">'+
+              '<input type="checkbox" id="preco-ativo"'+(p===null||p&&p.ativo!==false?' checked':'')+'>'+
+              '<div class="toggle-track"></div>'+
+              '<span class="toggle-label">Procedimento ativo</span>'+
+            '</label></div>'+
+        '</div>'+
 
-          <div class="modal-footer">
-            ${id ? `<button class="btn btn-sm btn-danger" style="margin-right:auto" data-id="${id}" data-nome="${(p?.nome||'').replace(/"/g,'&#34;')}" onclick="Precos.deletar(this.dataset.id, this.dataset.nome)">Excluir</button>` : ''}
-            <button class="btn btn-md btn-ghost" onclick="closeModal('m-preco')">Cancelar</button>
-            <button class="btn btn-md btn-primary" onclick="Precos.save()">Salvar procedimento</button>
-          </div>
-        </div>
-      </div>`;
+        '<div class="modal-footer">'+
+          (id ? '<button class="btn btn-sm btn-danger" style="margin-right:auto" onclick="Precos.deletarById(\''+id+'\');closeModal(\'m-preco\')">Excluir</button>' : '')+
+          '<button class="btn btn-md btn-ghost" onclick="closeModal(\'m-preco\')">Cancelar</button>'+
+          '<button class="btn btn-md btn-primary" onclick="Precos.save()">Salvar procedimento</button>'+
+        '</div>'+
+      '</div></div>';
 
     Modals.render('m-preco', html);
     Modals.open('m-preco');
@@ -2380,72 +2338,58 @@ const Precos = {
   },
 
   calcMargem(){
-    const c  = parseFloat(document.getElementById('preco-cliente')?.value) || 0;
-    const pr = parseFloat(document.getElementById('preco-prestador')?.value) || 0;
+    const c  = parseFloat(document.getElementById('preco-cliente')?.value)||0;
+    const pr = parseFloat(document.getElementById('preco-prestador')?.value)||0;
     const m  = c - pr;
-    const pct = c > 0 ? ((m / c) * 100).toFixed(1) : 0;
-    const el1 = document.getElementById('prev-cliente');
-    const el2 = document.getElementById('prev-prestador');
-    const el3 = document.getElementById('prev-margem');
-    const el4 = document.getElementById('prev-pct');
-    if(el1) el1.textContent = Utils.fmtR(c);
-    if(el2) el2.textContent = Utils.fmtR(pr);
-    if(el3) el3.textContent = Utils.fmtR(m);
-    if(el4) el4.textContent = pct + '%';
-    const preview = document.getElementById('preco-margem-preview');
-    if(preview){
-      preview.style.background = m >= 0 ? 'var(--success-bg)' : 'var(--danger-bg)';
-      preview.style.borderColor = m >= 0 ? 'var(--success-border)' : 'var(--danger-border)';
-      if(el3) el3.style.color = m >= 0 ? 'var(--success-text)' : 'var(--danger-text)';
-      if(el4) el4.style.color = m >= 0 ? 'var(--success-text)' : 'var(--danger-text)';
+    const pct = c>0 ? ((m/c)*100).toFixed(1) : 0;
+    const ok  = m >= 0;
+    const prev = document.getElementById('preco-preview');
+    if(prev){
+      prev.style.background   = ok?'var(--success-bg)':'var(--danger-bg)';
+      prev.style.borderColor  = ok?'var(--success-border)':'var(--danger-border)';
     }
+    const ec = document.getElementById('prev-c'); if(ec) ec.textContent = Utils.fmtR(c);
+    const ep = document.getElementById('prev-p'); if(ep) ep.textContent = Utils.fmtR(pr);
+    const em = document.getElementById('prev-m');
+    if(em){ em.textContent=Utils.fmtR(m); em.style.color=ok?'var(--success-text)':'var(--danger-text)'; }
+    const ept = document.getElementById('prev-pct');
+    if(ept){ ept.textContent=pct+'%'; ept.style.color=ok?'var(--success-text)':'var(--danger-text)'; }
   },
 
   async save(){
-    const nome     = document.getElementById('preco-nome')?.value.trim();
-    const cat      = document.getElementById('preco-cat')?.value;
-    const vlrC     = parseFloat(document.getElementById('preco-cliente')?.value);
-    const vlrP     = parseFloat(document.getElementById('preco-prestador')?.value);
-    const unidade  = document.getElementById('preco-unidade')?.value.trim();
-    const obs      = document.getElementById('preco-obs')?.value.trim();
-    const ativo    = document.getElementById('preco-ativo')?.checked;
-    const tipos    = [...document.querySelectorAll('input[name="preco-tipo"]:checked')].map(x=>x.value);
-    const id       = document.getElementById('preco-id')?.value;
+    const nome    = (document.getElementById('preco-nome')?.value||'').trim();
+    const cat     = document.getElementById('preco-cat')?.value||'';
+    const vlrC    = parseFloat(document.getElementById('preco-cliente')?.value);
+    const vlrP    = parseFloat(document.getElementById('preco-prestador')?.value);
+    const unidade = (document.getElementById('preco-unidade')?.value||'').trim();
+    const obs     = (document.getElementById('preco-obs')?.value||'').trim();
+    const ativo   = document.getElementById('preco-ativo')?.checked !== false;
+    const tipos   = [...document.querySelectorAll('input[name="preco-tipo"]:checked')].map(x=>x.value);
+    const id      = document.getElementById('preco-id')?.value||'';
 
     if(!nome){ Utils.toast('Informe o nome do procedimento.','error'); return; }
     if(!cat){  Utils.toast('Selecione a categoria.','error'); return; }
     if(isNaN(vlrC)||vlrC<0){ Utils.toast('Valor do cliente inválido.','error'); return; }
     if(isNaN(vlrP)||vlrP<0){ Utils.toast('Valor do prestador inválido.','error'); return; }
+    if(!window.DB_FIREBASE){ Utils.toast('Firebase não conectado.','error'); return; }
 
-    const obj = { nome, categoria: cat, unidade, vlrCliente: vlrC, vlrPrestador: vlrP, obs, ativo, tipos };
-
-    if(!window._dbReady){ Utils.toast('Firebase não conectado.','error'); return; }
-    const { db, collection, doc, addDoc, setDoc, serverTimestamp } = window.DB_FIREBASE;
+    const obj = {nome,categoria:cat,unidade,vlrCliente:vlrC,vlrPrestador:vlrP,obs,ativo,tipos};
+    const {db,collection,doc,addDoc,setDoc,serverTimestamp} = window.DB_FIREBASE;
     try {
-      if(id){
-        await setDoc(doc(db,'procedimentos',id), { ...obj, updatedAt: serverTimestamp() }, { merge: true });
-        Utils.toast('Procedimento atualizado!');
-      } else {
-        await addDoc(collection(db,'procedimentos'), { ...obj, createdAt: serverTimestamp() });
-        Utils.toast('Procedimento salvo!');
-      }
+      if(id){ await setDoc(doc(db,'procedimentos',id),{...obj,updatedAt:serverTimestamp()},{merge:true}); Utils.toast('Procedimento atualizado!'); }
+      else   { await addDoc(collection(db,'procedimentos'),{...obj,createdAt:serverTimestamp()}); Utils.toast('Procedimento salvo!'); }
       closeModal('m-preco');
-    } catch(e){
-      Utils.toast('Erro ao salvar: ' + e.message, 'error');
-    }
+    } catch(e){ Utils.toast('Erro ao salvar: '+e.message,'error'); }
   },
 
   async deletar(id, nome){
-    if(!confirm(`Excluir "${nome}"? Esta ação não pode ser desfeita.`)) return;
-    if(!window._dbReady){ Utils.toast('Firebase não conectado.','error'); return; }
-    const { db, doc, deleteDoc } = window.DB_FIREBASE;
+    if(!confirm('Excluir "'+nome+'"? Esta ação não pode ser desfeita.')) return;
+    if(!window.DB_FIREBASE){ Utils.toast('Firebase não conectado.','error'); return; }
+    const {db,doc,deleteDoc} = window.DB_FIREBASE;
     try {
       await deleteDoc(doc(db,'procedimentos',id));
-      closeModal('m-preco');
       Utils.toast('Procedimento excluído.','warning');
-    } catch(e){
-      Utils.toast('Erro ao excluir: ' + e.message,'error');
-    }
+    } catch(e){ Utils.toast('Erro ao excluir: '+e.message,'error'); }
   }
 };
 
